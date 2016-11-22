@@ -12,3 +12,8 @@
  * @date 22.11.2016
  * 
  */
+
+
+int main(int argc, char **argv) {
+
+}
