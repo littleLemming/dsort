@@ -8,7 +8,7 @@
 ##
 
 CC = gcc
-DEFS = -D_XOPEN_SOURCE=500 -D_BSD_SOURCE
+DEFS = -D_XOPEN_SOURCE=500 -D_DEFAULT_SOURCE #-D_BSD_SOURCE is deprecated 
 CFLAGS = -Wall -g -std=c99 -pedantic $(DEFS)
 
 .PHONY: all clean
