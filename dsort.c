@@ -80,16 +80,16 @@ static void free_resources(void);
 static void bail_out(int exitcode, const char *fmt, ...);
 
 /**
- * write_to_child
- * @brief run command in child and pipe command_output of the parent to stdin of the child
- */
-static void write_to_child(char* command);
-
-/**
  * read_from_child
  * @brief run command in child and pipe stdout of the child to command_output of the parent
  */
 static void read_from_child(char* command);
+
+/**
+ * write_to_child
+ * @brief run command in child and command_output of the parent to stdin of the child
+ */
+static void write_to_child(char* command);
 
 
 /* === Implementations === */
@@ -125,22 +125,6 @@ static void bail_out(int exitcode, const char *fmt, ...)
     exit(exitcode);
 }
 
-static void write_to_child(char* command) {
-    DEBUG("write_to_childe %s\n",command);
-    pid_t pid = fork ();
-    switch (pid) {
-        case -1:
-            DEBUG("write_to_child - ERROR\n");
-            break;
-        case 0:
-            DEBUG("write_to_child - CHILD\n");
-            break;
-        default:
-            DEBUG("write_to_child - PARENT\n");
-            break;
-    }
-}
-
 static void read_from_child(char* command) {
     DEBUG("read_from_child %s\n",command);
     pid_t pid = fork (); 
@@ -157,14 +141,39 @@ static void read_from_child(char* command) {
     }   
 }
 
+static void write_to_child(char* command) {
+    DEBUG("write_to_child %s\n",command);
+    pid_t pid = fork (); 
+    switch (pid) {
+        case -1: 
+            DEBUG("write_to_child - ERROR\n");
+            break;
+        case 0:
+            DEBUG("write_to_child - CHILD\n");
+            break;
+        default:
+            DEBUG("write_to_child - PARENT\n");
+            break;
+    }   
+}
+
 int main(int argc, char **argv) {
+    /* check if correct intput was passed on */
     if(argc > 0) {
         progname = argv[0];
     }
     if (argc != 3) {
         bail_out(EXIT_FAILURE, "Usage: %s <command1> <command2>", progname);
     }
+    /* exectue commands and read output from clients into command_output */
     read_from_child(argv[1]);
     read_from_child(argv[2]);
+
+    /* sort command_output */
+
+    /* execute uniq -d and print */
+
+    /* free resources and exit program without error */    
+
     return EXIT_SUCCESS;
 }
