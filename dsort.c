@@ -17,7 +17,8 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include<stdarg.h>
+#include <stdarg.h>
+#include <unistd.h>
 
 
 /* === Constants === */
@@ -45,8 +46,21 @@
 /* Name of the program */
 static const char *progname = "dsort"; /* default name */
 
+/* String-List that contains the Output of command1 and command2 */
+static struct string_list command_output;
+
 
 /* === Type Definitions === */
+
+/* Struct that represents a list of strings */
+struct string_list {
+    /* currently contained strings in the list */
+    char** content;
+    /* amount of strings stored in the list */
+    int amnt_strings;
+    /* current amount of allocated memory for strings - string-list is full if amnt_strings == max_amnt_strings */
+    int max_amnt_strings;
+};
 
 
 /* === Prototypes === */
@@ -65,12 +79,31 @@ static void free_resources(void);
  */
 static void bail_out(int exitcode, const char *fmt, ...);
 
+/**
+ * write_to_child
+ * @brief run command in child and pipe command_output of the parent to stdin of the child
+ */
+static void write_to_child(char* command);
+
+/**
+ * read_from_child
+ * @brief run command in child and pipe stdout of the child to command_output of the parent
+ */
+static void read_from_child(char* command);
+
 
 /* === Implementations === */
 
 static void free_resources(void)
 {
     /* clean up resources */
+    for (int i = 0; i < command_output.amnt_strings; ++i) {
+        free(command_output.content[i]);
+    }
+    free(&command_output.content[0]);
+    command_output.content = NULL;
+    command_output.amnt_strings = 0;
+    command_output.max_amnt_strings = 0;
 }
 
 static void bail_out(int exitcode, const char *fmt, ...)
@@ -92,11 +125,46 @@ static void bail_out(int exitcode, const char *fmt, ...)
     exit(exitcode);
 }
 
+static void write_to_child(char* command) {
+    DEBUG("write_to_childe %s\n",command);
+    pid_t pid = fork ();
+    switch (pid) {
+        case -1:
+            DEBUG("write_to_child - ERROR\n");
+            break;
+        case 0:
+            DEBUG("write_to_child - CHILD\n");
+            break;
+        default:
+            DEBUG("write_to_child - PARENT\n");
+            break;
+    }
+}
+
+static void read_from_child(char* command) {
+    DEBUG("read_from_child %s\n",command);
+    pid_t pid = fork (); 
+    switch (pid) {
+        case -1: 
+            DEBUG("read_from_child - ERROR\n");
+            break;
+        case 0:
+            DEBUG("read_from_child - CHILD\n");
+            break;
+        default:
+            DEBUG("read_from_child - PARENT\n");
+            break;
+    }   
+}
+
 int main(int argc, char **argv) {
     if(argc > 0) {
-		progname = argv[0];
-	}
+        progname = argv[0];
+    }
     if (argc != 3) {
         bail_out(EXIT_FAILURE, "Usage: %s <command1> <command2>", progname);
     }
+    read_from_child(argv[1]);
+    read_from_child(argv[2]);
+    return EXIT_SUCCESS;
 }
