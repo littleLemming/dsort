@@ -96,6 +96,7 @@ static void write_to_child(char* command);
 
 static void free_resources(void)
 {
+    DEBUG("free_resources");
     /* clean up resources */
     for (int i = 0; i < command_output.amnt_strings; ++i) {
         free(command_output.content[i]);
@@ -126,16 +127,47 @@ static void bail_out(int exitcode, const char *fmt, ...)
 }
 
 static void read_from_child(char* command) {
-    DEBUG("read_from_child %s\n",command);
-    pid_t pid = fork (); 
-    switch (pid) {
+    //DEBUG("read_from_child %s\n",command);
+    /* create argument list for executing the command */
+    char *cmd[] = { "bash", "-c", command, (char *) 0};
+    /* create the pipe */
+    int cmd_pipe[2];
+    if(pipe(cmd_pipe) != 0) {
+        bail_out(errno, "create pipe failed");
+    }
+    /* flush stdout before fork so that buffer is empty */
+    if(fflush(stdout) != 0) {
+        bail_out(errno, "flush of stdout failed");
+    }
+    /* do fork */
+    pid_t pid;
+    switch (pid = fork()) {
         case -1: 
             DEBUG("read_from_child - ERROR\n");
+            bail_out(errno,"fork failed");
             break;
         case 0:
+            fprintf(stdout,"child\n");
             DEBUG("read_from_child - CHILD\n");
+            /* close unused pipe end - read */
+            if(close(cmd_pipe[0]) != 0) {
+                bail_out(errno,"close pipe read end of child failed");
+            }
+            /* rewire stdout to the write pipe end */
+            if(dup2(cmd_pipe[1], fileno(stdout)) < 0) {
+                bail_out(errno,"rewire stdout to write pipe end failed");
+            }
+            /* close write pipe after redirect */
+            if(close(cmd_pipe[1]) != 0) {
+                bail_out(errno,"close pipe write end of child failed after rewire");
+            }
+            /* execute command */
+            fprintf(stdout,"bl");
+            (void)execv("/bin/bash", cmd);
+            bail_out(errno,"executing %s failed",command);
             break;
         default:
+            fprintf(stdout,"parent\n");
             DEBUG("read_from_child - PARENT\n");
             break;
     }   
@@ -143,7 +175,7 @@ static void read_from_child(char* command) {
 
 static void write_to_child(char* command) {
     DEBUG("write_to_child %s\n",command);
-    pid_t pid = fork (); 
+    pid_t pid = fork(); 
     switch (pid) {
         case -1: 
             DEBUG("write_to_child - ERROR\n");
@@ -172,6 +204,7 @@ int main(int argc, char **argv) {
     /* sort command_output */
 
     /* execute uniq -d and print */
+    write_to_child("uniq -d");    
 
     /* free resources and exit program without error */    
 
