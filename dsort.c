@@ -147,6 +147,7 @@ static void read_from_child(char* command) {
             bail_out(errno,"fork failed\n");
             break;
         case 0:
+            /* child - execute command and rewire stdout to write end of pipe */
             DEBUG("read_from_child - CHILD\n");
             /* close unused pipe end - read */
             if(close(cmd_pipe[0]) != 0) {
@@ -165,8 +166,23 @@ static void read_from_child(char* command) {
             bail_out(errno,"executing %s failed\n",command);
             break;
         default:
+            /* parent - read whatever the child writes and write it to command_output */
             DEBUG("read_from_child - PARENT\n");
-            break;
+            /* close unused pipe end - write */
+            if(close(cmd_pipe[1]) != 0) {
+                bail_out(errno,"close pipe read end of child failed\n");
+            }
+            /* create buffer for next line */
+            char next_line[LINE_SIZE];
+            FILE* output_stream;
+            /* create stream for reading the output from the client */
+            if ((output_stream = fdopen(cmd_pipe[0], "r")) == NULL) {
+                bail_out(errno,"read of read pipe end failed");
+            }
+            /* get next line of output */
+            while(fgets(buffer, sizeof buffer, read_stream) != NULL) {
+                
+            }
     }   
 }
 
