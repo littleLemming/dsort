@@ -133,41 +133,38 @@ static void read_from_child(char* command) {
     /* create the pipe */
     int cmd_pipe[2];
     if(pipe(cmd_pipe) != 0) {
-        bail_out(errno, "create pipe failed");
+        bail_out(errno, "create pipe failed\n");
     }
     /* flush stdout before fork so that buffer is empty */
     if(fflush(stdout) != 0) {
-        bail_out(errno, "flush of stdout failed");
+        bail_out(errno, "flush of stdout failed\n");
     }
     /* do fork */
     pid_t pid;
     switch (pid = fork()) {
         case -1: 
             DEBUG("read_from_child - ERROR\n");
-            bail_out(errno,"fork failed");
+            bail_out(errno,"fork failed\n");
             break;
         case 0:
-            fprintf(stdout,"child\n");
             DEBUG("read_from_child - CHILD\n");
             /* close unused pipe end - read */
             if(close(cmd_pipe[0]) != 0) {
-                bail_out(errno,"close pipe read end of child failed");
+                bail_out(errno,"close pipe read end of child failed\n");
             }
             /* rewire stdout to the write pipe end */
-            if(dup2(cmd_pipe[1], fileno(stdout)) < 0) {
-                bail_out(errno,"rewire stdout to write pipe end failed");
+            if(dup2(cmd_pipe[1], fileno(stdin)) < 0) {
+                bail_out(errno,"rewire stdout to write pipe end failed\n");
             }
             /* close write pipe after redirect */
             if(close(cmd_pipe[1]) != 0) {
-                bail_out(errno,"close pipe write end of child failed after rewire");
+                bail_out(errno,"close pipe write end of child failed after rewire\n");
             }
             /* execute command */
-            fprintf(stdout,"bl");
             (void)execv("/bin/bash", cmd);
-            bail_out(errno,"executing %s failed",command);
+            bail_out(errno,"executing %s failed\n",command);
             break;
         default:
-            fprintf(stdout,"parent\n");
             DEBUG("read_from_child - PARENT\n");
             break;
     }   
@@ -195,7 +192,7 @@ int main(int argc, char **argv) {
         progname = argv[0];
     }
     if (argc != 3) {
-        bail_out(EXIT_FAILURE, "Usage: %s <command1> <command2>", progname);
+        bail_out(EXIT_FAILURE, "Usage: %s <command1> <command2>\n", progname);
     }
     /* exectue commands and read output from clients into command_output */
     read_from_child(argv[1]);
