@@ -97,6 +97,12 @@ static void write_to_child(char* command);
  */
 static void wait_for_child(pid_t child_pid);
 
+/**
+ * cmpstringp
+ * @brief method to compare two strings - for qsort
+ */
+static int cmpstringp(const void *p1, const void *p2);
+
 /* === Implementations === */
 
 static void free_resources(void)
@@ -174,14 +180,14 @@ static void read_from_child(char* command) {
             DEBUG("read_from_child - PARENT\n");
             /* close unused pipe end - write */
             if(close(command_pipe[1]) != 0) {
-                bail_out(errno,"close pipe read end of child failed\n");
+                bail_out(errno,"close pipe read end of parent failed\n");
             }
             /* create buffer for next line */
             char next_line[LINE_SIZE];
-            /* create stream for reading the output from the client */
+            /* create stream for reading the output from the child */
             FILE* output_stream;
             if ((output_stream = fdopen(command_pipe[0], "r")) == NULL) {
-                bail_out(errno,"read of read pipe end failed\n");
+                bail_out(errno,"creating of write-stream failed\n");
             }
             /* get next line of output and save in command output */
             while(fgets(next_line, sizeof(next_line), output_stream) != NULL) {
@@ -241,8 +247,27 @@ static void write_to_child(char* command) {
             bail_out(errno,"executing %s failed\n",command);
             break;
         default:
+            /* parent - write whatever is in command_output into the write end of the pipe */
             DEBUG("write_to_child - PARENT\n");
-            break;
+            /* close unused pipe end - read */
+            if(close(command_pipe[0]) != 0) {
+                bail_out(errno,"close pipe read end of parent failed\n");
+            }
+            /* create stream for writing command_output to the child */
+            FILE *input_stream;
+            if ((input_stream = fdopen(command_pipe[1], "w")) == NULL) {
+                bail_out(errno,"creating write-stream failed\n");
+            }
+            /* write item for item from command_output into input stream */
+            for (int i = 0; i < command_output.amnt_strings; ++i) {
+                if(fputs(command_output.content[i], input_stream) == EOF) {
+                    bail_out(EXIT_FAILURE,"writing to child failed\n");
+                }
+            }
+            if(fclose(input_stream) != 0) {
+                bail_out(errno,"close input-write-stream failed\n");
+            }
+            wait_for_child(pid);
     }   
 }
 
@@ -264,6 +289,13 @@ static void wait_for_child(pid_t child_pid) {
     }
 }
 
+static int cmpstringp(const void *p1, const void *p2) {
+    /* The actual arguments to this function are "pointers to
+    pointers to char", but strcmp(3) arguments are "pointers
+    to char", hence the following cast plus dereference */
+    return strcmp(*(char * const *)p1, *(char * const *)p2);
+}
+
 int main(int argc, char **argv) {
     /* check if correct intput was passed on */
     if(argc > 0) {
@@ -281,10 +313,10 @@ int main(int argc, char **argv) {
     }
     read_from_child(argv[2]);
     for (int i = 0; i < command_output.amnt_strings; ++i) {
-        printf("%d: %s\n", i, command_output.content[i]);
+        DEBUG("%d: %s\n", i, command_output.content[i]);
     }
     /* sort command_output */
-
+    qsort(command_output.content, command_output.amnt_strings, sizeof(char*), cmpstringp);
     /* execute uniq -d and print */
     write_to_child("uniq -d");    
 
