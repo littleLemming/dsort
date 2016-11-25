@@ -317,10 +317,12 @@ int main(int argc, char **argv) {
     }
     /* sort command_output */
     qsort(command_output.content, command_output.amnt_strings, sizeof(char*), cmpstringp);
+    for (int i = 0; i < command_output.amnt_strings; ++i) {
+        DEBUG("%d: %s\n", i, command_output.content[i]);
+    } 
     /* execute uniq -d and print */
     write_to_child("uniq -d");    
-
     /* free resources and exit program without error */    
-
+    free_resources();  
     return EXIT_SUCCESS;
 }
