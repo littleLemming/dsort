@@ -19,7 +19,7 @@
 #include <errno.h>
 #include <stdarg.h>
 #include <unistd.h>
-
+#include <sys/wait.h>
 
 /* === Constants === */
 
@@ -91,6 +91,11 @@ static void read_from_child(char* command);
  */
 static void write_to_child(char* command);
 
+/**
+ * wait_for_child
+ * @brief partent-process waits for child-process to terminate before parent terminates
+ */
+static void wait_for_child(pid_t child_pid);
 
 /* === Implementations === */
 
@@ -116,8 +121,7 @@ static void bail_out(int exitcode, const char *fmt, ...)
         va_start(ap, fmt);
         (void) vfprintf(stderr, fmt, ap);
         va_end(ap);
-    }
-    if (errno != 0) {
+    } if (errno != 0) {
         (void) fprintf(stderr, ": %s", strerror(errno));
     }
     (void) fprintf(stderr, "\n");
@@ -127,14 +131,14 @@ static void bail_out(int exitcode, const char *fmt, ...)
 }
 
 static void read_from_child(char* command) {
-    //DEBUG("read_from_child %s\n",command);
+    DEBUG("read_from_child %s\n",command);
     /* create argument list for executing the command */
     char *cmd[] = { "bash", "-c", command, (char *) 0};
     /* create the pipe */
-    int cmd_pipe[2];
-    if(pipe(cmd_pipe) != 0) {
+    int command_pipe[2];
+    if(pipe(command_pipe) == -1) {
         bail_out(errno, "create pipe failed\n");
-    }
+    } 
     /* flush stdout before fork so that buffer is empty */
     if(fflush(stdout) != 0) {
         bail_out(errno, "flush of stdout failed\n");
@@ -150,15 +154,15 @@ static void read_from_child(char* command) {
             /* child - execute command and rewire stdout to write end of pipe */
             DEBUG("read_from_child - CHILD\n");
             /* close unused pipe end - read */
-            if(close(cmd_pipe[0]) != 0) {
+            if(close(command_pipe[0]) != 0) {
                 bail_out(errno,"close pipe read end of child failed\n");
             }
             /* rewire stdout to the write pipe end */
-            if(dup2(cmd_pipe[1], fileno(stdin)) < 0) {
+            if(dup2(command_pipe[1], fileno(stdout)) < 0) {
                 bail_out(errno,"rewire stdout to write pipe end failed\n");
             }
             /* close write pipe after redirect */
-            if(close(cmd_pipe[1]) != 0) {
+            if(close(command_pipe[1]) != 0) {
                 bail_out(errno,"close pipe write end of child failed after rewire\n");
             }
             /* execute command */
@@ -169,32 +173,72 @@ static void read_from_child(char* command) {
             /* parent - read whatever the child writes and write it to command_output */
             DEBUG("read_from_child - PARENT\n");
             /* close unused pipe end - write */
-            if(close(cmd_pipe[1]) != 0) {
+            if(close(command_pipe[1]) != 0) {
                 bail_out(errno,"close pipe read end of child failed\n");
             }
             /* create buffer for next line */
             char next_line[LINE_SIZE];
-            FILE* output_stream;
             /* create stream for reading the output from the client */
-            if ((output_stream = fdopen(cmd_pipe[0], "r")) == NULL) {
-                bail_out(errno,"read of read pipe end failed");
+            FILE* output_stream;
+            if ((output_stream = fdopen(command_pipe[0], "r")) == NULL) {
+                bail_out(errno,"read of read pipe end failed\n");
             }
-            /* get next line of output */
-            while(fgets(buffer, sizeof buffer, read_stream) != NULL) {
-                
+            /* get next line of output and save in command output */
+            while(fgets(next_line, sizeof(next_line), output_stream) != NULL) {
+                 if(command_output.content == NULL) {
+                     command_output.max_amnt_strings = 5;
+                     command_output.content = malloc(command_output.max_amnt_strings * sizeof(char*));
+                 } else if(command_output.max_amnt_strings == command_output.amnt_strings) {
+                     command_output.max_amnt_strings += 5;
+                     command_output.content = realloc(command_output.content, command_output.max_amnt_strings * sizeof(char*));
+                 }
+                 command_output.content[command_output.amnt_strings] = strdup(next_line);
+                 ++command_output.amnt_strings;
+            } if(fclose(output_stream) != 0) {
+                bail_out(errno,"close output-read-stream failed\n");
             }
+            wait_for_child(pid);
     }   
 }
 
 static void write_to_child(char* command) {
     DEBUG("write_to_child %s\n",command);
+    /* create argument list for executing the command */
+    char *cmd[] = { "bash", "-c", command, (char *) 0}; 
+    /* create the pipe */
+    int command_pipe[2];
+    if(pipe(command_pipe) == -1) {
+        bail_out(errno, "create pipe failed\n");
+    }   
+    /* flush stdout before fork so that buffer is empty */
+    if(fflush(stdout) != 0) {
+        bail_out(errno, "flush of stdout failed\n");
+    }   
+    /* do fork */
     pid_t pid = fork(); 
     switch (pid) {
         case -1: 
             DEBUG("write_to_child - ERROR\n");
+            bail_out(errno,"fork failed\n");
             break;
         case 0:
+            /* child - execute command and get input for the command from read pipe rewired to stdin */
             DEBUG("write_to_child - CHILD\n");
+            /* close unused pipe end - write */
+            if(close(command_pipe[1]) != 0) {
+                bail_out(errno,"close pipe write end of child failed\n");
+            }
+            /* rewire stdin to the read pipe end */
+            if(dup2(command_pipe[0], fileno(stdin)) < 0) {
+                bail_out(errno,"rewire stdin to read pipe end failed\n");
+            }
+            /* close read pipe after redirect */
+            if(close(command_pipe[0]) != 0) {
+                bail_out(errno,"close pipe read end of child failed after rewire\n");
+            }
+            /* execute command */
+            (void)execv("/bin/bash", cmd);
+            bail_out(errno,"executing %s failed\n",command);
             break;
         default:
             DEBUG("write_to_child - PARENT\n");
@@ -202,18 +246,43 @@ static void write_to_child(char* command) {
     }   
 }
 
+static void wait_for_child(pid_t child_pid) {
+    DEBUG("wait_for_child\n");
+    int status;
+    pid_t pid;
+    while((pid = wait(&status)) != child_pid) {
+        if(pid != -1) {
+            continue; /* other child */
+        } if(errno == EINTR) {
+            continue; /* interrupted */
+        }
+        bail_out(errno,"wait for child failed\n");
+    } if(WEXITSTATUS(status) == EXIT_SUCCESS) {
+        DEBUG("child exit successfully\n");
+    } else {
+        DEBUG("error in child occured\n");
+    }
+}
+
 int main(int argc, char **argv) {
     /* check if correct intput was passed on */
     if(argc > 0) {
         progname = argv[0];
-    }
-    if (argc != 3) {
+    } if (argc != 3) {
         bail_out(EXIT_FAILURE, "Usage: %s <command1> <command2>\n", progname);
     }
     /* exectue commands and read output from clients into command_output */
+    command_output.content = NULL;
+    command_output.amnt_strings = 0;
+    command_output.max_amnt_strings = 0;
     read_from_child(argv[1]);
+    for (int i = 0; i < command_output.amnt_strings; ++i) {
+        DEBUG("%d: %s\n", i, command_output.content[i]);
+    }
     read_from_child(argv[2]);
-
+    for (int i = 0; i < command_output.amnt_strings; ++i) {
+        printf("%d: %s\n", i, command_output.content[i]);
+    }
     /* sort command_output */
 
     /* execute uniq -d and print */
