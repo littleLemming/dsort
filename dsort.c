@@ -24,6 +24,7 @@
 /* === Constants === */
 
 /**
+ * LINE_SIZE
  * @brief max length for the strings in string_list - 1023 real characters and a \0 
  */
 #define LINE_SIZE (1024)
@@ -32,6 +33,7 @@
 /* === Macros === */
 
 /**
+ * DEBUG
  * @brief print debug messages if the debug flag is set 
  */
 #ifdef ENDEBUG
@@ -43,23 +45,32 @@
 
 /* === Global Variables === */
 
-/* Name of the program */
-static const char *progname = "dsort"; /* default name */
+/**
+ * progname
+ * @brief name of the program
+ */
+static const char *progname = "dsort";
 
-/* String-List that contains the Output of command1 and command2 */
+/**
+ * command_output (=struct string_list)
+ * string-List that contains the Output of command1 and command2 (= input)
+ */
 static struct string_list command_output;
 
 
 /* === Type Definitions === */
 
-/* Struct that represents a list of strings */
+/**
+ * struct string_list
+ * @brief struct that represents a list of strings 
+ */
 struct string_list {
-    /* currently contained strings in the list */
-    char** content;
-    /* amount of strings stored in the list */
+    /** currently contained strings in the list */
+    char** content; 
+    /** amount of strings stored in the list */
     int amnt_strings;
-    /* current amount of allocated memory for strings - string-list is full if amnt_strings == max_amnt_strings */
-    int max_amnt_strings;
+    /** current amount of allocated memory for strings - string-list is full if amnt_strings == max_amnt_strings */ 
+    int max_amnt_strings; 
 };
 
 
@@ -100,6 +111,8 @@ static void wait_for_child(pid_t child_pid);
 /**
  * cmpstringp
  * @brief method to compare two strings - for qsort
+ * @param p1 one string
+ * @param p2 other string
  */
 static int cmpstringp(const void *p1, const void *p2);
 
@@ -296,6 +309,12 @@ static int cmpstringp(const void *p1, const void *p2) {
     return strcmp(*(char * const *)p1, *(char * const *)p2);
 }
 
+/**
+ * main
+ * @brief starting point of program
+ * @param argc number of program arguments
+ * @param argv program arguments
+ */
 int main(int argc, char **argv) {
     /* check if correct intput was passed on */
     if(argc > 0) {
