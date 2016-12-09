@@ -73,6 +73,8 @@ until the child has terminated.
 After wait the child process gets removed from the proccess table, which is important as terminated processes remain in the
 process table and no new processes can be started as soon as the table is full.
 
+`waitpid` can be used for waiting for a specific child.
+
 ##### Zombie
 
 A zombie is a terminated child process for which the parent did not yet call `wait()`. The state oft the child is set to 
@@ -85,5 +87,22 @@ process. As soon as the orphan terminates, the init process removes it from the 
 
 ## Pipes:
 
+A pipe is an undirectional data channel between related processes. 
+
+A pipe can be created by calling `int pipe(int pipefd [2]);` the file descriptors get returned in the specified interger
+array pipefd, where `pipefd[0]` is the read and and `pipefd[1]` is the write end.
+
+For the pipe to work as expected all unused ends have to get closed. Read and write are supposed to get used via streams. 
+A child process inherets the pipe. 
+
+The read indicates end-of-file, if all write ends of the pipe are closed, write creates the signal `SIGPIPE` if all read 
+ends of the pipe are closed.
+
+The kernel automatically removes pipes where all ends have been closed.
+
+It is possible to redirect stin/stdout into one of the pipe ends. This can be done by at first closing all unused pipe-ends,
+then duplicating the opened file descriptor to the cloesd one and in the end closing the duplicated file descriptor.
+
+For duplicating the file descriptors `dup` or `dup2` can be used. 
 
 ## Dynamic Allocation of memory:
