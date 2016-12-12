@@ -103,6 +103,18 @@ The kernel automatically removes pipes where all ends have been closed.
 It is possible to redirect stin/stdout into one of the pipe ends. This can be done by at first closing all unused pipe-ends,
 then duplicating the opened file descriptor to the cloesd one and in the end closing the duplicated file descriptor.
 
-For duplicating the file descriptors `dup` or `dup2` can be used. 
+For duplicating the file descriptors `dup` or `dup2` can be used. Afterwards the duplicted (but not wanted) file descriptor should get closed. 
+
+An example with dup2 would be:
+
+`dup2(command_pipe[1], fileno(stdout))`
+
+and on success execute
+
+`close(command_pipe[1])`
+
+This example rewires the output of stdout to the write end of the pipe.
 
 ## Dynamic Allocation of memory:
+
+This can be achieved by using `malloc` for reserving a block of memory for the first time, `realloc` for chaning the size of the block of memory and `free` for freeing the memory space as soon as it is no longer needed.
